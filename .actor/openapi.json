@@ -232,7 +232,7 @@
         "required": ["jsonrpc", "method"],
         "properties": {
           "jsonrpc": { "type": "string", "enum": ["2.0"] },
-          "id": { "oneOf": [{ "type": "string" }, { "type": "number" }, { "type": "null" }] },
+          "id": { "type": "string", "description": "Request identifier, echoed in the response." },
           "method": {
             "type": "string",
             "description": "MCP method, e.g. `initialize`, `tools/list`, `tools/call`, `ping`, `notifications/initialized`."
@@ -244,7 +244,7 @@
         "type": "object",
         "properties": {
           "jsonrpc": { "type": "string", "enum": ["2.0"] },
-          "id": { "oneOf": [{ "type": "string" }, { "type": "number" }, { "type": "null" }] },
+          "id": { "type": "string", "description": "Request identifier, echoed in the response." },
           "result": { "type": "object", "additionalProperties": true },
           "error": {
             "type": "object",
