@@ -22,10 +22,9 @@ storage/
 .apify/
 apify_storage/
 
-# Vendored agent tooling (Apify skill + tool-specific symlinks).
-# Not project source; excluded so the MIT license covers only our code.
+# Vendored agent tooling (Apify skill). Not project source; excluded so the
+# MIT license covers only our code.
 .agents/
-.factory/
 
 # IDE and editor files
 .vscode/
