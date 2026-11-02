@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "you-apify-actor",
+      "name": "@youdotcom-oss/apify-actor",
       "dependencies": {
         "apify": "3.7.2",
         "hono": "4.13.16",
