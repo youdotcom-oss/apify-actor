@@ -190,6 +190,30 @@ describe('credential translation', () => {
     expect(last?.headers.get('user-agent')).toContain('apify-actor:you-mcp')
   })
 
+  test('forwards the modern Mcp-Method and Mcp-Name headers upstream', async () => {
+    // Regression guard: dropping these makes the upstream reject modern
+    // (2026-07-28+) clients with -32020 / HTTP 400.
+    upstream.respond(sse({ jsonrpc: '2.0', id: 1, result: { tools: [] } }))
+    const { app } = buildApp()
+    await post(app, '/mcp', toolsListRequest, {
+      'mcp-method': 'tools/list',
+      'mcp-protocol-version': '2026-07-28',
+    })
+    expect(upstream.requests.at(-1)?.headers.get('mcp-method')).toBe('tools/list')
+    expect(upstream.requests.at(-1)?.headers.get('mcp-protocol-version')).toBe('2026-07-28')
+  })
+
+  test('forwards Mcp-Name for tools/call so modern clients resolve the tool', async () => {
+    upstream.respond(sse({ jsonrpc: '2.0', id: 2, result: { content: [] } }))
+    const { app } = buildApp()
+    await post(app, '/mcp', toolCallRequest('you-search'), {
+      'mcp-method': 'tools/call',
+      'mcp-name': 'you-search',
+    })
+    expect(upstream.requests.at(-1)?.headers.get('mcp-name')).toBe('you-search')
+    expect(upstream.requests.at(-1)?.headers.get('mcp-method')).toBe('tools/call')
+  })
+
   test('preserves single-tool path suffixes', async () => {
     upstream.respond(sse({ jsonrpc: '2.0', id: 2, result: { content: [] } }))
     const { app } = buildApp()

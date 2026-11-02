@@ -52,6 +52,15 @@ export const BALANCE_REQUIRES_KEY_MESSAGE =
  * @remarks Allowlist rather than passthrough, so an inbound `Authorization`
  * (Apify token) or an Apify-internal header can never leak to You.com.
  *
+ * `mcp-method` and `mcp-name` are REQUIRED for compliance by the Streamable
+ * HTTP transport in MCP revision 2026-07-28 and later: the body names a method
+ * and, for `tools/call` / `resources/read` / `prompts/get`, a name, and the
+ * server rejects the request with `-32020` and HTTP 400 when the mirroring
+ * headers are absent. Dropping them silently breaks every modern client, so
+ * they must be forwarded even though this proxy never reads them itself.
+ *
+ * @see https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http
+ *
  * @internal
  */
 const FORWARDED_HEADERS = [
@@ -59,6 +68,8 @@ const FORWARDED_HEADERS = [
   'content-type',
   'mcp-session-id',
   'mcp-protocol-version',
+  'mcp-method',
+  'mcp-name',
   'last-event-id',
   'accept-language',
 ] as const

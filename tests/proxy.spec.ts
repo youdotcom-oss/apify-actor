@@ -124,6 +124,24 @@ describe('buildUpstreamHeaders', () => {
     expect(auth.headers['user-agent']).toBe(base.userAgent)
   })
 
+  test('forwards the modern transport headers Mcp-Method and Mcp-Name', () => {
+    // MCP revision 2026-07-28+ REQUIRES these to mirror the JSON-RPC body; the
+    // upstream server rejects the request with -32020 / HTTP 400 without them.
+    const auth = buildUpstreamHeaders({
+      ...base,
+      inbound: inbound({
+        'mcp-method': 'tools/call',
+        'mcp-name': 'you-search',
+        'mcp-protocol-version': '2026-07-28',
+      }),
+      byokKey: undefined,
+      actorApiKey: undefined,
+    })
+    expect(auth.headers['mcp-method']).toBe('tools/call')
+    expect(auth.headers['mcp-name']).toBe('you-search')
+    expect(auth.headers['mcp-protocol-version']).toBe('2026-07-28')
+  })
+
   test('drops unknown inbound headers rather than passing them through', () => {
     const auth = buildUpstreamHeaders({
       ...base,
