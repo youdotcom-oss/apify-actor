@@ -1,0 +1,37 @@
+{
+  "name": "you-apify-actor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Apify Standby Actor exposing the You.com MCP server over HTTP",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/youdotcom-oss/apify-actor.git"
+  },
+  "author": {
+    "name": "You.com",
+    "email": "support@you.com",
+    "url": "https://you.com"
+  },
+  "type": "module",
+  "engines": {
+    "bun": ">= 1.2.21"
+  },
+  "scripts": {
+    "start": "bun src/main.ts",
+    "check": "bun run check:biome && bun run check:types",
+    "check:biome": "biome check",
+    "check:types": "tsc --noEmit",
+    "check:write": "biome check --write",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "apify": "3.7.2",
+    "hono": "4.13.16"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "@types/bun": "1.4.4",
+    "typescript": "7.0.2"
+  }
+}

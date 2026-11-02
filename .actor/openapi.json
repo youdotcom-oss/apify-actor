@@ -1,0 +1,261 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "You.com MCP Server (Apify Standby)",
+    "version": "0.1.0",
+    "description": "Streamable HTTP MCP server proxying the You.com MCP server. All MCP endpoints speak JSON-RPC 2.0 (initialize, tools/list, tools/call, ping) and answer with text/event-stream or application/json depending on the Accept header.\n\nAuthentication: Apify Standby requires `Authorization: Bearer <APIFY_TOKEN>` (or `?token=<APIFY_TOKEN>`). Supply your You.com API key in the `X-YDC-API-Key` header, or use `?profile=free` for the keyless tool set.",
+    "contact": {
+      "name": "You.com",
+      "url": "https://you.com/docs/agents/mcp-server"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://{username}--you-com-mcp.apify.actor",
+      "description": "Actor Standby URL. Replace {username} with your Apify username.",
+      "variables": {
+        "username": {
+          "default": "your-username",
+          "description": "Apify username that owns the Actor"
+        }
+      }
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Readiness probe",
+        "description": "Returns 200 while the server is ready. Apify Standby sends this with the `x-apify-container-server-readiness-probe` header.",
+        "operationId": "readiness",
+        "responses": {
+          "200": {
+            "description": "Server is ready",
+            "content": {
+              "text/plain": {
+                "schema": { "type": "string", "example": "OK" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mcp": {
+      "post": {
+        "summary": "MCP JSON-RPC endpoint (all tools)",
+        "description": "Full MCP endpoint. Available tools depend on the caller's profile and allowlist: `you-search`, `you-contents`, `you-research`, `you-finance`, `you-discover`, and — only for callers that send `X-YDC-API-Key` — `you-balance`.",
+        "operationId": "mcpAll",
+        "security": [{ "apifyStandby": [] }, { "apifyStandbyQuery": [] }],
+        "parameters": [
+          {
+            "name": "X-YDC-API-Key",
+            "in": "header",
+            "required": false,
+            "description": "Caller's You.com API key. Overrides the Actor operator key. Required for `you-balance`.",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "X-Allowed-Tools",
+            "in": "header",
+            "required": false,
+            "description": "Comma-separated allowlist of tool names. A non-empty value replaces the `tools` query parameter.",
+            "schema": { "type": "string", "example": "you-search,you-contents" }
+          },
+          {
+            "name": "profile",
+            "in": "query",
+            "required": false,
+            "description": "Tool profile ceiling. `free` enables `you-search` and `you-discover` keylessly (100 queries/day); `discover` enables `you-discover` keylessly. Omitted or unknown allows all key-backed tools.",
+            "schema": { "type": "string", "enum": ["free", "discover"] }
+          },
+          {
+            "name": "tools",
+            "in": "query",
+            "required": false,
+            "description": "Comma-separated allowlist of tool names.",
+            "schema": { "type": "string", "example": "you-search,you-research" }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Apify token, when a client cannot set the Authorization header. Never forwarded to You.com.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/JsonRpcRequest" },
+              "examples": {
+                "initialize": {
+                  "summary": "MCP initialize handshake",
+                  "value": {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                      "protocolVersion": "2025-06-18",
+                      "capabilities": {},
+                      "clientInfo": { "name": "example-client", "version": "1.0.0" }
+                    }
+                  }
+                },
+                "listTools": {
+                  "summary": "List available tools",
+                  "value": { "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {} }
+                },
+                "callSearch": {
+                  "summary": "Call you-search",
+                  "value": {
+                    "jsonrpc": "2.0",
+                    "id": 3,
+                    "method": "tools/call",
+                    "params": {
+                      "name": "you-search",
+                      "arguments": { "query": "grid-scale battery storage news", "count": 5 }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON-RPC response, or an SSE stream of JSON-RPC messages",
+            "content": {
+              "text/event-stream": {
+                "schema": { "type": "string" }
+              },
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/JsonRpcResponse" }
+              }
+            }
+          },
+          "401": { "description": "Missing or invalid Apify token" },
+          "502": { "description": "Upstream You.com MCP server unreachable or timed out" }
+        }
+      },
+      "get": {
+        "summary": "MCP server-to-client SSE stream",
+        "description": "Opens the long-lived server-to-client stream for the MCP Streamable HTTP transport.",
+        "operationId": "mcpStream",
+        "security": [{ "apifyStandby": [] }, { "apifyStandbyQuery": [] }],
+        "responses": {
+          "200": {
+            "description": "SSE stream",
+            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+          },
+          "401": { "description": "Missing or invalid Apify token" }
+        }
+      },
+      "delete": {
+        "summary": "Terminate the MCP session",
+        "description": "Ends the session identified by the `Mcp-Session-Id` header.",
+        "operationId": "mcpDelete",
+        "security": [{ "apifyStandby": [] }, { "apifyStandbyQuery": [] }],
+        "responses": {
+          "204": { "description": "Session terminated" },
+          "401": { "description": "Missing or invalid Apify token" }
+        }
+      }
+    },
+    "/mcp/research": {
+      "post": {
+        "summary": "MCP JSON-RPC endpoint (you-research only)",
+        "description": "Single-tool MCP endpoint exposing `you-research`. `tools` and `X-Allowed-Tools` are ignored on this path, matching the upstream You.com MCP server.",
+        "operationId": "mcpResearch",
+        "security": [{ "apifyStandby": [] }, { "apifyStandbyQuery": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/JsonRpcRequest" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON-RPC response, or an SSE stream of JSON-RPC messages",
+            "content": {
+              "text/event-stream": { "schema": { "type": "string" } },
+              "application/json": { "schema": { "$ref": "#/components/schemas/JsonRpcResponse" } }
+            }
+          },
+          "401": { "description": "Missing or invalid Apify token" },
+          "502": { "description": "Upstream You.com MCP server unreachable or timed out" }
+        }
+      }
+    },
+    "/mcp/finance": {
+      "post": {
+        "summary": "MCP JSON-RPC endpoint (you-finance only)",
+        "description": "Single-tool MCP endpoint exposing `you-finance`. `tools` and `X-Allowed-Tools` are ignored on this path, matching the upstream You.com MCP server.",
+        "operationId": "mcpFinance",
+        "security": [{ "apifyStandby": [] }, { "apifyStandbyQuery": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/JsonRpcRequest" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON-RPC response, or an SSE stream of JSON-RPC messages",
+            "content": {
+              "text/event-stream": { "schema": { "type": "string" } },
+              "application/json": { "schema": { "$ref": "#/components/schemas/JsonRpcResponse" } }
+            }
+          },
+          "401": { "description": "Missing or invalid Apify token" },
+          "502": { "description": "Upstream You.com MCP server unreachable or timed out" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apifyStandby": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Apify token as `Authorization: Bearer <APIFY_TOKEN>`. Recommended, because query-parameter tokens can be captured in server logs."
+      },
+      "apifyStandbyQuery": {
+        "type": "apiKey",
+        "in": "query",
+        "name": "token",
+        "description": "Apify token as `?token=<APIFY_TOKEN>`, for clients that cannot set headers. Never forwarded upstream."
+      }
+    },
+    "schemas": {
+      "JsonRpcRequest": {
+        "type": "object",
+        "required": ["jsonrpc", "method"],
+        "properties": {
+          "jsonrpc": { "type": "string", "enum": ["2.0"] },
+          "id": { "oneOf": [{ "type": "string" }, { "type": "number" }, { "type": "null" }] },
+          "method": {
+            "type": "string",
+            "description": "MCP method, e.g. `initialize`, `tools/list`, `tools/call`, `ping`, `notifications/initialized`."
+          },
+          "params": { "type": "object", "additionalProperties": true }
+        }
+      },
+      "JsonRpcResponse": {
+        "type": "object",
+        "properties": {
+          "jsonrpc": { "type": "string", "enum": ["2.0"] },
+          "id": { "oneOf": [{ "type": "string" }, { "type": "number" }, { "type": "null" }] },
+          "result": { "type": "object", "additionalProperties": true },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "integer" },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [{ "apifyStandby": [] }, { "apifyStandbyQuery": [] }]
+}

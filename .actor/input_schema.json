@@ -1,0 +1,8 @@
+{
+  "title": "You.com MCP Server",
+  "type": "object",
+  "schemaVersion": 1,
+  "description": "This Actor is a Standby-mode MCP server. It takes no initialization input: every request arrives over HTTP and is forwarded to the You.com MCP server. Configure it through environment variables on the Actor, not through this form.",
+  "properties": {},
+  "additionalProperties": false
+}

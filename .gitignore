@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+.npmrc
+
+# Lock files (Bun - only bun.lock is tracked)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+.pnpm-store/
+
+# Environment variables (CRITICAL - contains API keys)
+.env
+.env.*
+!.env.example
+
+# API keys and secrets (extra safety)
+*.key
+secrets.json
+
+# Apify CLI local runtime state (local storages, not tracked)
+storage/
+.apify/
+apify_storage/
+
+# Vendored agent tooling (Apify skill + tool-specific symlinks).
+# Not project source; excluded so the MIT license covers only our code.
+.agents/
+.factory/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Logs
+logs/
+*.log
+loglevel.json
+
+# Cache directories
+.cache/
+.tmp/
+tmp/
+
+# Test artifacts
+coverage/
+*.lcov
+
+# Git worktrees
+.worktrees/

@@ -1,0 +1,14 @@
+{
+  "actorSpecification": 1,
+  "name": "you-com-mcp",
+  "title": "You.com MCP Server",
+  "description": "Apify Standby Actor that serves the You.com MCP server over Streamable HTTP: live web search, page content extraction, citation-backed research, finance research, account balance, and agent/tool discovery.",
+  "version": "0.1",
+  "usesStandbyMode": true,
+  "inputSchema": "./input_schema.json",
+  "webServerSchema": "./openapi.json",
+  "meta": {
+    "generatedBy": "Pi with deepseek-v4.1-flash"
+  },
+  "dockerfile": "../Dockerfile"
+}
