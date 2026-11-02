@@ -113,7 +113,7 @@ describe('readiness probe', () => {
     const { app } = buildApp()
     const response = await app.fetch(new Request('http://localhost/'))
     expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({ status: 'ok', actor: 'you-com-mcp' })
+    expect(await response.json()).toMatchObject({ status: 'ok', actor: 'you-mcp' })
   })
 })
 
@@ -187,7 +187,7 @@ describe('credential translation', () => {
     expect(last?.url).not.toContain('token=')
     expect(last?.url).toContain('profile=free')
     expect(last?.headers.get('authorization')).not.toContain('apify_secret')
-    expect(last?.headers.get('user-agent')).toContain('apify-actor:you-com-mcp')
+    expect(last?.headers.get('user-agent')).toContain('apify-actor:you-mcp')
   })
 
   test('preserves single-tool path suffixes', async () => {

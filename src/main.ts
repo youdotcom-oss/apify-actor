@@ -61,7 +61,7 @@ const isPlatformRun = Actor.isAtHome()
 if (isPlatformRun && !isStandby) {
   const standbyUrl = process.env.ACTOR_STANDBY_URL ?? 'the Actor Standby tab'
   log.warning(
-    `you-com-mcp is a Standby-only Actor and does not produce results in a normal run. Use the Standby URL instead: ${standbyUrl}`,
+    `you-mcp is a Standby-only Actor and does not produce results in a normal run. Use the Standby URL instead: ${standbyUrl}`,
   )
   await Actor.exit()
 }
@@ -83,7 +83,7 @@ Actor.on('aborting', async () => {
   await Actor.exit()
 })
 
-log.info('you-com-mcp is serving', {
+log.info('you-mcp is serving', {
   port,
   standby: isStandby,
   upstream: config.upstreamMcpUrl,

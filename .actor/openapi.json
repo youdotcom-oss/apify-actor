@@ -11,7 +11,7 @@
   },
   "servers": [
     {
-      "url": "https://{username}--you-com-mcp.apify.actor",
+      "url": "https://{username}--you-mcp.apify.actor",
       "description": "Actor Standby URL. Replace {username} with your Apify username.",
       "variables": {
         "username": {

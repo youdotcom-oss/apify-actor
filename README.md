@@ -42,15 +42,15 @@ it: the tool is hidden from `tools/list` and rejected on `tools/call` unless the
 ## How to connect
 
 Create or open the Actor, enable **Standby mode**, and copy the Standby URL from the **Standby** tab:
-`https://<your-username>--you-com-mcp.apify.actor`.
+`https://<your-username>--you-mcp.apify.actor`.
 
 ### MCP client configuration
 
 ```json
 {
   "mcpServers": {
-    "you-com": {
-      "url": "https://your-username--you-com-mcp.apify.actor/mcp",
+    "you": {
+      "url": "https://your-username--you-mcp.apify.actor/mcp",
       "headers": {
         "Authorization": "Bearer <APIFY_TOKEN>",
         "X-YDC-API-Key": "<YDC_API_KEY>"
@@ -110,7 +110,7 @@ default set is `you-search`, `you-contents`, `you-balance`, `you-discover`.
 Initialize:
 
 ```bash
-curl -sS -X POST 'https://your-username--you-com-mcp.apify.actor/mcp?profile=free' \
+curl -sS -X POST 'https://your-username--you-mcp.apify.actor/mcp?profile=free' \
   -H 'Authorization: Bearer <APIFY_TOKEN>' \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json, text/event-stream' \
@@ -120,7 +120,7 @@ curl -sS -X POST 'https://your-username--you-com-mcp.apify.actor/mcp?profile=fre
 Search the web:
 
 ```bash
-curl -sS -X POST 'https://your-username--you-com-mcp.apify.actor/mcp?profile=free' \
+curl -sS -X POST 'https://your-username--you-mcp.apify.actor/mcp?profile=free' \
   -H 'Authorization: Bearer <APIFY_TOKEN>' \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json, text/event-stream' \

@@ -66,7 +66,7 @@ export const DEFAULT_FIRST_BYTE_TIMEOUT_MS = 290_000
 export const ACTOR_VERSION = '0.1.0'
 
 /** `User-Agent` value identifying traffic as coming from this Actor. */
-export const DEFAULT_USER_AGENT = `apify-actor:you-com-mcp/${ACTOR_VERSION}`
+export const DEFAULT_USER_AGENT = `apify-actor:you-mcp/${ACTOR_VERSION}`
 
 /**
  * Reads a positive integer from an environment variable.

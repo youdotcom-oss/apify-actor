@@ -253,7 +253,7 @@ export const createApp = (deps: AppDeps): Hono => {
 
   app.get('/', (c) => {
     if (c.req.header(READINESS_PROBE_HEADER) !== undefined) return c.text('OK')
-    return c.json({ status: 'ok', actor: 'you-com-mcp', standby: true })
+    return c.json({ status: 'ok', actor: 'you-mcp', standby: true })
   })
 
   const proxy = (c: Context) => handleMcp(c, deps)

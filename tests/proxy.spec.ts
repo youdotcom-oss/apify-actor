@@ -34,7 +34,7 @@ describe('isPaymentAuthHeader', () => {
 })
 
 describe('buildUpstreamHeaders', () => {
-  const base = { userAgent: 'apify-actor:you-com-mcp/0.1.0' }
+  const base = { userAgent: 'apify-actor:you-mcp/0.1.0' }
 
   test('prefers the caller BYOK key over the actor key', () => {
     const auth = buildUpstreamHeaders({
