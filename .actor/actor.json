@@ -6,6 +6,7 @@
   "version": "0.1",
   "usesStandbyMode": true,
   "inputSchema": "./input_schema.json",
+  "outputSchema": "./output_schema.json",
   "webServerSchema": "./openapi.json",
   "meta": {
     "generatedBy": "Pi with deepseek-v4.1-flash"

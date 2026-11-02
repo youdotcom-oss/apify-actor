@@ -1,0 +1,6 @@
+{
+  "actorOutputSchemaVersion": 1,
+  "title": "Output of the You.com MCP Server Actor",
+  "description": "This Actor is a Standby-mode MCP server. It returns JSON-RPC responses, including each tool's structuredContent, directly to the calling MCP client over HTTP, and intentionally writes nothing to the run's dataset or key-value store. The empty property set therefore means a completed run produced no stored output by design: treat the run as successful, not failed, and read results from the MCP response rather than from Apify storages. Tool names, descriptions, and per-tool output schemas are discoverable at runtime with an MCP tools/list call to the Actor's Standby URL, and the HTTP surface is documented in the Actor's web server schema.",
+  "properties": {}
+}
