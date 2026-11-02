@@ -49,6 +49,12 @@ export type ActorConfig = {
   readonly chargingEnabled: boolean
   readonly firstByteTimeoutMs: number
   readonly userAgent: string
+  readonly clientInfo: {
+    readonly name: string
+    readonly version: string
+    readonly title: string
+    readonly websiteUrl: string
+  }
 }
 
 /** Default upstream MCP endpoint; override with `YDC_MCP_UPSTREAM_URL`. */
@@ -67,6 +73,12 @@ export const ACTOR_VERSION = '0.1.0'
 
 /** `User-Agent` value identifying traffic as coming from this Actor. */
 export const DEFAULT_USER_AGENT = `apify-actor:you-mcp/${ACTOR_VERSION}`
+
+/** Client name this Actor self-reports upstream in the modern `_meta` envelope. */
+export const CLIENT_NAME = 'apify-actor'
+
+/** Actor page URL, used as the client identity `websiteUrl` when no Standby URL is available. */
+export const DEFAULT_ACTOR_URL = 'https://apify.com/youdotcom/you-mcp'
 
 /**
  * Reads a positive integer from an environment variable.
@@ -121,4 +133,10 @@ export const readConfig = (env: Env = process.env): ActorConfig => ({
   chargingEnabled: env.YDC_PPE_CHARGING_ENABLED === 'true',
   firstByteTimeoutMs: parsePositiveInt(env.YDC_FIRST_BYTE_TIMEOUT_MS, DEFAULT_FIRST_BYTE_TIMEOUT_MS),
   userAgent: DEFAULT_USER_AGENT,
+  clientInfo: {
+    name: CLIENT_NAME,
+    version: ACTOR_VERSION,
+    title: 'Apify Actor - You.com MCP Server',
+    websiteUrl: env.ACTOR_STANDBY_URL?.trim() || DEFAULT_ACTOR_URL,
+  },
 })

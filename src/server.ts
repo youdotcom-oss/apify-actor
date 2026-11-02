@@ -26,7 +26,9 @@ import {
   buildUpstreamUrl,
   collectToolCalls,
   collectToolsListIds,
+  deriveTransportHeaders,
   filterToolsListResult,
+  injectModernEnvelope,
   isSuccessfulToolResult,
   resolveChargeEvent,
   safeJsonParse,
@@ -89,6 +91,16 @@ const errorMessage = (error: unknown): string => (error instanceof Error ? error
 const READINESS_PROBE_HEADER = 'x-apify-container-server-readiness-probe'
 
 /**
+ * Header the Apify MCP server sets to say which surface issued the request.
+ *
+ * @remarks Carries `MCP` or `APIFY_AI`. Forwarded upstream and folded into the
+ * `ua=` segment of `X-Client-Info` so Apify-mediated traffic stays attributable.
+ *
+ * @internal
+ */
+const APIFY_ORIGIN_HEADER = 'x-apify-request-origin'
+
+/**
  * Deadline for the upstream response *headers* only.
  *
  * @param timeoutMs - First-byte deadline in milliseconds
@@ -131,12 +143,21 @@ const handleMcp = async (c: Context, deps: AppDeps): Promise<Response> => {
   const bodyText = method === 'POST' ? await inbound.text() : undefined
   const parsedBody = safeJsonParse(bodyText)
 
+  // Speak the modern per-request MCP revision upstream. A caller that already
+  // supplies the envelope is passed through untouched; otherwise this Actor
+  // fills it in and self-reports as the client, because on this hop it is one.
+  const injected = injectModernEnvelope(parsedBody, config.clientInfo)
+  const upstreamBody = injected.changed ? JSON.stringify(injected.body) : bodyText
+  const transport = deriveTransportHeaders(injected.body)
+
   const byokKey = inbound.headers.get(BYOK_HEADER)?.trim() || undefined
   const auth = buildUpstreamHeaders({
     inbound: inbound.headers,
     byokKey,
     actorApiKey: config.actorApiKey,
     userAgent: config.userAgent,
+    transport,
+    apifyOrigin: inbound.headers.get(APIFY_ORIGIN_HEADER)?.trim() || undefined,
   })
 
   const toolsListIds = new Set(collectToolsListIds(parsedBody))
@@ -160,7 +181,7 @@ const handleMcp = async (c: Context, deps: AppDeps): Promise<Response> => {
     upstreamResponse = await fetch(upstreamUrl, {
       method,
       headers: auth.headers,
-      body: bodyText,
+      body: upstreamBody,
       signal,
       redirect: 'manual',
     })

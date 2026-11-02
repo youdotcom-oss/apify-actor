@@ -190,6 +190,63 @@ describe('credential translation', () => {
     expect(last?.headers.get('user-agent')).toContain('apify-actor:you-mcp')
   })
 
+  test('injects the complete modern _meta envelope when the caller sent none', async () => {
+    upstream.respond(sse({ jsonrpc: '2.0', id: 1, result: { tools: [] } }))
+    const { app } = buildApp()
+    await post(app, '/mcp', toolsListRequest)
+
+    const sent = JSON.parse(upstream.requests.at(-1)?.body ?? '{}') as {
+      params: { _meta: Record<string, unknown> }
+    }
+    expect(sent.params._meta['io.modelcontextprotocol/protocolVersion']).toBe('2026-07-28')
+    expect(sent.params._meta['io.modelcontextprotocol/clientCapabilities']).toEqual({})
+    expect(sent.params._meta['io.modelcontextprotocol/clientInfo']).toMatchObject({ name: 'apify-actor' })
+  })
+
+  test("preserves a calling client's own _meta envelope instead of overwriting it", async () => {
+    upstream.respond(sse({ jsonrpc: '2.0', id: 1, result: { tools: [] } }))
+    const { app } = buildApp()
+    await post(app, '/mcp', {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/list',
+      params: {
+        _meta: {
+          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+          'io.modelcontextprotocol/clientCapabilities': { elicitation: {} },
+          'io.modelcontextprotocol/clientInfo': { name: 'opencode', version: '1.2.3', title: 'OpenCode' },
+        },
+      },
+    })
+
+    const sent = JSON.parse(upstream.requests.at(-1)?.body ?? '{}') as {
+      params: { _meta: Record<string, unknown> }
+    }
+    expect(sent.params._meta['io.modelcontextprotocol/clientInfo']).toEqual({
+      name: 'opencode',
+      version: '1.2.3',
+      title: 'OpenCode',
+    })
+  })
+
+  test('derives Mcp-Method upstream even when the caller sent no headers', async () => {
+    upstream.respond(sse({ jsonrpc: '2.0', id: 2, result: { content: [] } }))
+    const { app } = buildApp()
+    await post(app, '/mcp', toolCallRequest('you-search'))
+    const last = upstream.requests.at(-1)
+    expect(last?.headers.get('mcp-method')).toBe('tools/call')
+    expect(last?.headers.get('mcp-name')).toBe('you-search')
+  })
+
+  test('forwards and surfaces the Apify request origin for attribution', async () => {
+    upstream.respond(sse({ jsonrpc: '2.0', id: 1, result: { tools: [] } }))
+    const { app } = buildApp()
+    await post(app, '/mcp', toolsListRequest, { 'x-apify-request-origin': 'MCP' })
+    const last = upstream.requests.at(-1)
+    expect(last?.headers.get('x-apify-request-origin')).toBe('MCP')
+    expect(last?.headers.get('user-agent')).toContain('origin=MCP')
+  })
+
   test('forwards the modern Mcp-Method and Mcp-Name headers upstream', async () => {
     // Regression guard: dropping these makes the upstream reject modern
     // (2026-07-28+) clients with -32020 / HTTP 400.

@@ -7,11 +7,17 @@ import {
   buildUpstreamSearchParams,
   buildUpstreamUrl,
   CHARGE_EVENT_BY_TOOL,
+  CLIENT_CAPABILITIES_META_KEY,
+  CLIENT_INFO_META_KEY,
   collectToolCalls,
   collectToolsListIds,
+  deriveTransportHeaders,
   filterToolsListResult,
+  injectModernEnvelope,
   isPaymentAuthHeader,
   isSuccessfulToolResult,
+  MODERN_PROTOCOL_VERSION,
+  PROTOCOL_VERSION_META_KEY,
   resolveChargeEvent,
   safeJsonParse,
 } from '../src/proxy.ts'
@@ -313,6 +319,112 @@ describe('resolveChargeEvent', () => {
   test('never charges unmetered or unknown tools', () => {
     expect(resolveChargeEvent({ ...base, toolName: BALANCE_TOOL_NAME })).toBeUndefined()
     expect(resolveChargeEvent({ ...base, toolName: 'you-unknown' })).toBeUndefined()
+  })
+})
+
+describe('injectModernEnvelope', () => {
+  const clientInfo = { name: 'apify-actor', version: '0.1.0', title: 'Apify Actor', websiteUrl: 'https://example.com' }
+  const request = (params: unknown = {}) => ({ jsonrpc: '2.0', id: 1, method: 'tools/list', params })
+
+  test('fills the complete envelope so the request is spec-valid, not partial', () => {
+    const { body, changed } = injectModernEnvelope(request(), clientInfo)
+    expect(changed).toBe(true)
+    const meta = (body as { params: { _meta: Record<string, unknown> } }).params._meta
+    expect(meta[PROTOCOL_VERSION_META_KEY]).toBe(MODERN_PROTOCOL_VERSION)
+    expect(meta[CLIENT_CAPABILITIES_META_KEY]).toEqual({})
+    expect(meta[CLIENT_INFO_META_KEY]).toEqual(clientInfo)
+  })
+
+  test("preserves a caller's own version, capabilities, and identity", () => {
+    const caller = {
+      [PROTOCOL_VERSION_META_KEY]: '2027-01-01',
+      [CLIENT_CAPABILITIES_META_KEY]: { elicitation: {} },
+      [CLIENT_INFO_META_KEY]: { name: 'Claude Desktop', version: '0.7.6' },
+    }
+    const { body, changed } = injectModernEnvelope(request({ _meta: { ...caller } }), clientInfo)
+    expect(changed).toBe(false)
+    const meta = (body as { params: { _meta: Record<string, unknown> } }).params._meta
+    expect(meta[PROTOCOL_VERSION_META_KEY]).toBe('2027-01-01')
+    expect(meta[CLIENT_CAPABILITIES_META_KEY]).toEqual({ elicitation: {} })
+    expect(meta[CLIENT_INFO_META_KEY]).toEqual({ name: 'Claude Desktop', version: '0.7.6' })
+  })
+
+  test('leaves unrelated _meta keys untouched', () => {
+    const { body } = injectModernEnvelope(request({ _meta: { 'x402/payment': 'sig' } }), clientInfo)
+    const meta = (body as { params: { _meta: Record<string, unknown> } }).params._meta
+    expect(meta['x402/payment']).toBe('sig')
+  })
+
+  test('adds params and _meta when the message has neither', () => {
+    const { body } = injectModernEnvelope({ jsonrpc: '2.0', id: 7, method: 'ping' }, clientInfo)
+    expect((body as { params: { _meta: unknown } }).params._meta).toBeDefined()
+  })
+
+  test('handles a batch and reports change', () => {
+    const { body, changed } = injectModernEnvelope(
+      [
+        { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
+        { jsonrpc: '2.0', method: 'notifications/initialized' },
+      ],
+      clientInfo,
+    )
+    expect(changed).toBe(true)
+    expect(Array.isArray(body)).toBe(true)
+    expect((body as unknown[]).length).toBe(2)
+  })
+
+  test('ignores non-request values', () => {
+    expect(injectModernEnvelope(undefined, clientInfo).changed).toBe(false)
+    expect(injectModernEnvelope('nonsense', clientInfo).changed).toBe(false)
+    expect(injectModernEnvelope({ jsonrpc: '2.0', id: 1, result: {} }, clientInfo).changed).toBe(false)
+  })
+})
+
+describe('deriveTransportHeaders', () => {
+  test('derives mcp-method for any request', () => {
+    expect(deriveTransportHeaders({ jsonrpc: '2.0', id: 1, method: 'tools/list' })).toEqual({
+      'mcp-method': 'tools/list',
+    })
+  })
+
+  test('derives mcp-name from params.name for tools/call', () => {
+    const headers = deriveTransportHeaders({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'you-search' },
+    })
+    expect(headers['mcp-method']).toBe('tools/call')
+    expect(headers['mcp-name']).toBe('you-search')
+  })
+
+  test('derives mcp-name from params.uri for resources/read', () => {
+    const headers = deriveTransportHeaders({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'resources/read',
+      params: { uri: 'file:///a.json' },
+    })
+    expect(headers['mcp-name']).toBe('file:///a.json')
+  })
+
+  test('omits mcp-name when there is no name or uri', () => {
+    expect(deriveTransportHeaders({ jsonrpc: '2.0', id: 1, method: 'ping' })['mcp-name']).toBeUndefined()
+  })
+
+  test('uses the first message of a batch', () => {
+    const headers = deriveTransportHeaders([
+      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'you-finance' } },
+      { jsonrpc: '2.0', id: 2, method: 'tools/list' },
+    ])
+    expect(headers['mcp-method']).toBe('tools/call')
+    expect(headers['mcp-name']).toBe('you-finance')
+  })
+
+  test('returns nothing for malformed input', () => {
+    expect(deriveTransportHeaders(undefined)).toEqual({})
+    expect(deriveTransportHeaders(['x'])).toEqual({})
+    expect(deriveTransportHeaders({ jsonrpc: '2.0', id: 1 })).toEqual({})
   })
 })
 

@@ -39,6 +39,47 @@ export const BYOK_HEADER = 'x-ydc-api-key'
 export const BALANCE_TOOL_NAME = 'you-balance'
 
 /**
+ * Modern (per-request) MCP revision this proxy speaks to the upstream server.
+ *
+ * @remarks Revision `2026-07-28` and later convey protocol version, client
+ * capabilities, and client identity as per-request metadata in `_meta` instead
+ * of an `initialize` handshake. See the versioning page of the MCP spec.
+ *
+ * @public
+ */
+export const MODERN_PROTOCOL_VERSION = '2026-07-28'
+
+/** `_meta` key carrying the protocol version of the request. Required by the modern revision. */
+export const PROTOCOL_VERSION_META_KEY = 'io.modelcontextprotocol/protocolVersion'
+
+/** `_meta` key carrying the client capabilities relevant to the request. Required by the modern revision. */
+export const CLIENT_CAPABILITIES_META_KEY = 'io.modelcontextprotocol/clientCapabilities'
+
+/**
+ * `_meta` key carrying the calling client's self-reported identity.
+ *
+ * @remarks Optional per spec, and explicitly intended for "display, logging,
+ * and debugging" — which is what this Actor populates it for. When a caller
+ * supplies one it is preserved; otherwise the Actor identifies itself, because
+ * on this hop the Actor genuinely is the MCP client.
+ *
+ * @public
+ */
+export const CLIENT_INFO_META_KEY = 'io.modelcontextprotocol/clientInfo'
+
+/**
+ * Identity a `mcp` client reports about itself in `_meta`.
+ *
+ * @public
+ */
+export type ClientInfo = {
+  readonly name: string
+  readonly version: string
+  readonly title?: string
+  readonly websiteUrl?: string
+}
+
+/**
  * Error text returned when `you-balance` is called without a BYOK key.
  *
  * @public
@@ -352,14 +393,24 @@ export const buildUpstreamHeaders = (options: {
   byokKey: string | undefined
   actorApiKey: string | undefined
   userAgent: string
+  transport?: Record<string, string>
+  apifyOrigin?: string | undefined
 }): UpstreamAuth => {
-  const { inbound, byokKey, actorApiKey, userAgent } = options
+  const { inbound, byokKey, actorApiKey, userAgent, transport, apifyOrigin } = options
   const headers: Record<string, string> = {}
 
   for (const name of FORWARDED_HEADERS) {
     const value = inbound.get(name)
     if (value) headers[name] = value
   }
+
+  // Derived transport headers fill gaps only: a caller that already sent them
+  // (any modern MCP client) must be mirrored exactly.
+  for (const [name, value] of Object.entries(transport ?? {})) {
+    if (!headers[name]) headers[name] = value
+  }
+
+  if (apifyOrigin) headers['x-apify-request-origin'] = apifyOrigin
   for (const name of PAYMENT_HEADERS) {
     const value = inbound.get(name)
     if (value) headers[name] = value
@@ -373,9 +424,126 @@ export const buildUpstreamHeaders = (options: {
   const resolvedKey = byokKey ?? actorApiKey
   if (!payment && resolvedKey) headers.authorization = `Bearer ${resolvedKey}`
 
-  headers['user-agent'] = userAgent
+  // The inbound UA is a runtime signal (node/python/...) and `X-Apify-Request-Origin`
+  // distinguishes the calling Apify surface (MCP vs APIFY_AI). Both ride in the
+  // single `ua=` segment of X-Client-Info, which is the only place the upstream
+  // grammar exposes them.
+  const inboundUserAgent = inbound.get('user-agent')
+  const uaParts = [userAgent]
+  if (inboundUserAgent) uaParts.push(`caller=${inboundUserAgent}`)
+  if (apifyOrigin) uaParts.push(`origin=${apifyOrigin}`)
+  headers['user-agent'] = uaParts.join(' ')
 
   return { headers, hasByok, payment, keyless: !payment && !resolvedKey }
+}
+
+/**
+ * Ensures a JSON-RPC message carries the complete modern `_meta` envelope.
+ *
+ * @param message - A single JSON-RPC message
+ * @param clientInfo - Identity to inject when the caller supplied none
+ * @returns The (possibly rewritten) message and whether it changed
+ *
+ * @remarks
+ * Every field is only filled when absent, so a caller that already speaks the
+ * modern revision keeps its own protocol version, capabilities, and identity.
+ * The full envelope is written — not just `clientInfo` — because the spec makes
+ * `protocolVersion` and `clientCapabilities` required and requires servers to
+ * reject a request missing them. A partial envelope would work against this
+ * upstream today only by leniency, and would break if that were tightened.
+ *
+ * @internal
+ */
+const withModernMeta = (message: unknown, clientInfo: ClientInfo): { value: unknown; changed: boolean } => {
+  if (message === null || typeof message !== 'object' || Array.isArray(message)) {
+    return { value: message, changed: false }
+  }
+  const record = message as Record<string, unknown>
+  if (typeof record['method'] !== 'string') return { value: message, changed: false }
+
+  const params =
+    record['params'] !== null && typeof record['params'] === 'object' && !Array.isArray(record['params'])
+      ? { ...(record['params'] as Record<string, unknown>) }
+      : {}
+  const meta =
+    params['_meta'] !== null && typeof params['_meta'] === 'object' && !Array.isArray(params['_meta'])
+      ? { ...(params['_meta'] as Record<string, unknown>) }
+      : {}
+
+  let changed = false
+  if (meta[PROTOCOL_VERSION_META_KEY] === undefined) {
+    meta[PROTOCOL_VERSION_META_KEY] = MODERN_PROTOCOL_VERSION
+    changed = true
+  }
+  if (meta[CLIENT_CAPABILITIES_META_KEY] === undefined) {
+    meta[CLIENT_CAPABILITIES_META_KEY] = {}
+    changed = true
+  }
+  if (meta[CLIENT_INFO_META_KEY] === undefined) {
+    meta[CLIENT_INFO_META_KEY] = clientInfo
+    changed = true
+  }
+  if (!changed) return { value: message, changed: false }
+
+  params['_meta'] = meta
+  return { value: { ...record, params }, changed: true }
+}
+
+/**
+ * Applies {@link withModernMeta} to a request body.
+ *
+ * @param body - Parsed JSON-RPC request or batch
+ * @param clientInfo - Identity to inject when the caller supplied none
+ * @returns The rewritten body and whether anything changed
+ *
+ * @public
+ */
+export const injectModernEnvelope = (body: unknown, clientInfo: ClientInfo): { body: unknown; changed: boolean } => {
+  if (Array.isArray(body)) {
+    let changed = false
+    const value = body.map((message) => {
+      const result = withModernMeta(message, clientInfo)
+      if (result.changed) changed = true
+      return result.value
+    })
+    return changed ? { body: value, changed: true } : { body, changed: false }
+  }
+  const result = withModernMeta(body, clientInfo)
+  return { body: result.value, changed: result.changed }
+}
+
+/**
+ * Derives the transport headers the modern revision requires to mirror the body.
+ *
+ * @param body - Parsed JSON-RPC request or batch
+ * @returns `mcp-method` and `mcp-name` where the body supplies them
+ *
+ * @remarks The Streamable HTTP transport REQUIRES `Mcp-Method` on every request
+ * and `Mcp-Name` for `tools/call`, `resources/read`, and `prompts/get`; the
+ * server rejects a request whose body and headers disagree with `-32020` and
+ * HTTP 400. Deriving them lets a legacy caller's request still satisfy the
+ * modern contract we speak upstream.
+ *
+ * @public
+ */
+export const deriveTransportHeaders = (body: unknown): Record<string, string> => {
+  const headers: Record<string, string> = {}
+  const first = Array.isArray(body) ? body[0] : body
+  if (first === null || typeof first !== 'object' || Array.isArray(first)) return headers
+
+  const record = first as Record<string, unknown>
+  const method = record['method']
+  if (typeof method !== 'string') return headers
+  headers['mcp-method'] = method
+
+  const params =
+    record['params'] !== null && typeof record['params'] === 'object' && !Array.isArray(record['params'])
+      ? (record['params'] as Record<string, unknown>)
+      : undefined
+  const name = params?.['name'] ?? params?.['uri']
+  if (typeof name === 'string' && name) headers['mcp-name'] = name
+
+  return headers
 }
 
 /**
